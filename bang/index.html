@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+
+<TITLE>Phantom Dev</TITLE>
+
+<script language="javascript" src="debug.verbose.js"></script>
+
+</HEAD>
+
+<BODY>
+
+<form>
+
+<div id		= "Canvas"
+	 style	= "width:1000px;height:640px;position:absolute;left:0px;top:0px;background-color:#CCCCCC;overflow: hidden">	
+
+	<input type="button" value="Paint" style="position: absolute; left: 940px; top: 60px; z-Index: 99999;" onclick="beginNote();" />
+	<input type="button" value="Clear" style="position: absolute; left: 940px; top: 90px; z-Index: 99999;" onclick="clearNote();" />
+	<bgsound id="snd" loop="0" src="" /> 
+	
+	<textarea id="sample" cols="100" rows="100" style="width: 100px;height:100px;display: none;">copy</textarea>
+
+</div>
+
+
+
+<div id		= "Output"
+	 style	= "position:absolute;left:1200px;top:0px;">	
+</div>
+<script language="javascript">
+	var _demo_loader = "demo/debug";
+</script>
+
+
+</form>
+
+</BODY>
+
+</HTML>
