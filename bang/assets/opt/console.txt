@@ -1,0 +1,42 @@
+
+var	_T_Event = jazzyClassForName("jazzy.dom.core.Event");
+
+function keyHook(e)
+{
+	if(!_T_Event)
+		return;
+
+	var jEvent = _T_Event.toEvent(e);
+
+	var consumed = false;
+
+	switch(jEvent.keyCode())
+	{
+		case 27:
+			var input = window.prompt("Scripting console > ", "");
+			if(input != null)
+			{
+				var foo = eval(input);
+				if(foo != null)
+				{
+					alert("result = " + foo);
+				}
+			}
+			consumed = true;
+			break;
+		default:
+			consumed = false;
+	}
+
+	if(consumed)
+	{
+		jEvent.consume();
+	}
+	else
+	{
+		window.status = "keycode := " + jEvent.keyCode();
+	}
+
+}
+
+document.onkeydown	= keyHook;

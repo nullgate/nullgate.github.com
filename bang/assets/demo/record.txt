@@ -1,0 +1,2 @@
+_demo_record();
+_asset_require("opt/console");
