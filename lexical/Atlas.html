@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<HTML>
+<head>
+	<meta charset="utf-8">
+	<title>Consensus - Lexical Atlas</title>
+	<link rel="stylesheet" href="css/sigma.css" type="text/css" media="screen" charset="utf-8">
+
+	<script type="text/javascript" charset="utf-8" src="vendor/raphael-min.js"></script>
+	<script type="text/javascript" charset="utf-8" src="vendor/raphael-font.js"></script>
+	<script type="text/javascript" charset="utf-8" src="vendor/jquery.min.js"></script>
+	<script type="text/javascript" charset="utf-8" src="vendor/breadcrumb.js"></script>
+
+	<script type="text/javascript" charset="utf-8" src="site/sigma.hack.js"></script>
+	<script type="text/javascript" charset="utf-8" src="site/sigma.forceatlas2.hack.js"></script>
+
+	<script type="text/javascript" charset="utf-8" src="site/sphinx.jazzy.js"></script>
+	<script type="text/javascript" charset="utf-8" src="site/sphinx.driver.js"></script>
+
+	<script language="javascript" type="text/javascript">
+
+var isRunning = true;
+var stopLayout;
+
+function hsv_to_rgb(h, s, v)
+{  
+    var c = v * s;  
+    var h1 = h / 60;  
+    var x = c * (1 - Math.abs((h1 % 2) - 1));  
+    var m = v - c;  
+    var rgb;  
+      
+    if (typeof h == 'undefined') rgb = [0, 0, 0];  
+    else if (h1 < 1) rgb = [c, x, 0];  
+    else if (h1 < 2) rgb = [x, c, 0];  
+    else if (h1 < 3) rgb = [0, c, x];  
+    else if (h1 < 4) rgb = [0, x, c];  
+    else if (h1 < 5) rgb = [x, 0, c];  
+    else if (h1 <= 6) rgb = [c, 0, x];  
+      
+    return [Math.floor(255 * (rgb[0] + m)), Math.floor(255 * (rgb[1] + m)), Math.floor(255 * (rgb[2] + m))];  
+} 
+
+function node_shader(node, watermark)
+{
+	var h = 0;
+	var s = 1;
+	var v = 0;
+
+	if(node.inbound == 0)
+	{
+		h = 0;
+	}
+	else if(node.outbound == 0)
+	{
+		h = 120;
+	}
+	else
+	{
+		h = 120*(node.outflow/(node.inflow + node.outflow))
+	}
+
+	v = node.saturation;
+
+	if(v >= 1) v = 1;
+
+	var rgb = hsv_to_rgb(h, v, 0.8);
+
+	return "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+}
+
+function node_size(node, json)
+{
+	if(json["context"])
+	{
+		var relative = node.count / json.context.cardinality;
+		return Math.sqrt(relative * 4000);
+	}
+	else
+	{
+		return node.size;
+	}
+}
+
+toggle_cache = function()
+{
+	show_cache_view(Sphinx.cache({"atlas":1, "atlas2":1}),
+					function(a,b){window.location = "Atlas.html?" + b;});
+}
+
+function normalize(weight)
+{
+	if(weight < 1)
+	{
+		return 1;
+	}
+	if(weight > 6)
+	{
+		return 6;
+	}
+	return weight;
+}
+
+function jsHook()
+{
+	var decoded	= Sphinx.comprehend("&.data.foundation_020");
+
+	var uri = "asset/"+ decoded["data"] + ".txt";
+	var file	= Sphinx.loadURI("asset/"+ decoded["data"] + ".txt");
+
+	Sphinx.assert(file, "oops");
+
+	document.getElementById("source").href = uri;
+
+	//createBreadcrumb("breadcrumb_canvas", decoded["p"]);
+
+	var json = Sphinx.json(file);
+	var factor = 0.02;
+	var watermark = json.watermark;
+
+	for(var i in json.nodes)
+	{
+		var node = json.nodes[i];
+		var chaos = Sphinx.hash("abc" + node.id);
+		node["x"] = (chaos % 256) / 256.0 + factor * Math.random();
+		node["y"] = ((chaos / 256) % 256) / 256.0 + factor * Math.random();
+		node["color"] = node_shader(node, watermark);
+		node["size"] = node_size(node, json);
+		node["type"] = "lexical";
+	}
+
+	json["limits"] = 1;
+	json["centre"] = 1;
+
+	if(decoded["p"])
+	{
+		json["title"] = "Primed View by " + decoded["p"];
+	}
+	else
+	{
+		json["title"] = "Default View";
+	}
+	
+	if(decoded["p"]) json["primer"] = decoded["p"];
+
+	visualize(json);
+}
+
+function visualize(data)
+{
+	var json = data;
+
+	/**
+	* First, let's instanciate sigma.js :
+	*/
+	var sigInst = sigma	.init($('#holder')[0])
+						.drawingProperties(
+						{
+							defaultLabelColor: '#222',
+							defaultEdgeType: 'curve',
+							defaultEdgeArrow: 'target'
+						}).graphProperties(
+						{
+							minNodeSize: 2,
+							maxNodeSize: 32,
+							maxEdgeSize: 3
+						});
+
+	var startNode = { "id" : "“", "size" : 32, 'x' : -64, 'y' : 0, 'color' : '#c8c', 'type': "semantic", 'invariant': 1 };
+	var endNode = { "id" : "”", "size" : 32, 'x' : 64, 'y' : 0,  'color' : '#8cc', 'type': "semantic", 'invariant': 1};
+	var centreNode = { "id" : "*", "size" : 32, 'x' : 0, 'y' : 0,  'color' : '#ccc', 'type': "semantic", 'hidden': 1 };
+
+	if(json["limits"])
+	{
+		sigInst.addNode(startNode.id, startNode);
+		sigInst.addNode(endNode.id, endNode);		
+	}
+
+	if(json["centre"])
+	{
+		sigInst.addNode(centreNode.id, centreNode);	
+		
+		if(json["limits"])
+		{
+			{
+				var edge = { "id" : "SC", "source" : centreNode.id, "target" : startNode.id};
+				edge["size"] = 1/3;
+				edge["weight"] = 1;
+				sigInst.addEdge(edge.id, edge.source, edge.target, edge);
+			}
+
+			{
+				var edge = { "id" : "EC", "source" : centreNode.id, "target" : endNode.id};
+				edge["size"] = 1/3;
+				edge["weight"] = 1;
+				sigInst.addEdge(edge.id, edge.source, edge.target, edge);			
+			}
+		}
+	}
+
+	for(var i in json.nodes)
+	{
+		var node = json.nodes[i];
+		sigInst.addNode(node.id, node);
+
+		if(json["limits"])
+		{
+			if(node.inbound == 0)
+			{
+				var edge = { "id" : "S" + node.id, "source" : startNode.id, "target" : node.id};
+				edge["size"] = 1/3;
+				edge["weight"] = 1;
+				sigInst.addEdge(edge.id, edge.source, edge.target, edge);
+			}
+
+			if(node.outbound == 0)
+			{
+				var edge = { "id" : "S" + node.id, "target" : endNode.id, "source" : node.id};
+				edge["size"] = 1/3;
+				edge["weight"] = 1;
+				sigInst.addEdge(edge.id, edge.source, edge.target, edge);
+			}
+		}
+
+		if(json["centre"])
+		{
+			if(node["is_hub"])
+			{
+				var edge = { "id" : "C" + node.id, "source" : centreNode.id, "target" : node.id};
+				edge["size"] = 1/3;
+				edge["weight"] = 1;
+				sigInst.addEdge(edge.id, edge.source, edge.target, edge);				
+			}
+		}
+	}
+
+	for(var j in json.edges)
+	{
+		var edge = json.edges[j];
+		edge["size"] = normalize(edge.gain);
+		edge["weight"] = 1 + edge.gain/10;
+		sigInst.addEdge(edge.id, edge.source, edge.target, edge);
+	}
+
+	var greyColor = '#666';
+	sigInst.bind('overnodes',function(event){
+		if(isRunning) return;
+		var nodes = event.content;
+		var neighbors = {};
+		sigInst.iterEdges(function(e){
+			if(nodes.indexOf(e.source)<0 && nodes.indexOf(e.target)<0){
+				if(!e.attr['grey']){
+					e.attr['true_color'] = e.color;
+					e.color = greyColor;
+					e.attr['grey'] = 1;
+				}
+			}else{
+				e.color = e.attr['grey'] ? e.attr['true_color'] : e.color;
+				e.attr['grey'] = 0;
+ 
+				neighbors[e.source] = 1;
+				neighbors[e.target] = 1;
+			}
+		}).iterNodes(function(n){
+			if(!neighbors[n.id]){
+				if(!n.attr['grey']){
+					n.attr['true_color'] = n.color;
+					n.color = greyColor;
+					n.attr['grey'] = 1;
+				}
+			}else{
+				n.color = n.attr['grey'] ? n.attr['true_color'] : n.color;
+				n.attr['grey'] = 0;
+			}
+		}).draw(2,2,2);
+	})
+	.bind('outnodes',function()
+	{
+		if(isRunning) return;
+		sigInst.iterEdges(function(e)
+		{
+			e.color = e.attr['grey'] ? e.attr['true_color'] : e.color;
+			e.attr['grey'] = 0;
+		})
+		.iterNodes(function(n)
+		{
+			n.color = n.attr['grey'] ? n.attr['true_color'] : n.color;
+			n.attr['grey'] = 0;
+		})
+		.draw(2,2,2);
+	});
+
+	var r = Raphael("panel");
+
+	var title = r.text(640, 24, data.title);
+	title.attr({ fill: "#444", font: "20px 'Fontin Sans', Fontin-Sans, sans-serif" });
+
+	var toggle = r.path("M31.229,17.736c0.064-0.571,0.104-1.148,0.104-1.736s-0.04-1.166-0.104-1.737l-4.377-1.557c-0.218-0.716-0.504-1.401-0.851-2.05l1.993-4.192c-0.725-0.91-1.549-1.734-2.458-2.459l-4.193,1.994c-0.647-0.347-1.334-0.632-2.049-0.849l-1.558-4.378C17.165,0.708,16.588,0.667,16,0.667s-1.166,0.041-1.737,0.105L12.707,5.15c-0.716,0.217-1.401,0.502-2.05,0.849L6.464,4.005C5.554,4.73,4.73,5.554,4.005,6.464l1.994,4.192c-0.347,0.648-0.632,1.334-0.849,2.05l-4.378,1.557C0.708,14.834,0.667,15.412,0.667,16s0.041,1.165,0.105,1.736l4.378,1.558c0.217,0.715,0.502,1.401,0.849,2.049l-1.994,4.193c0.725,0.909,1.549,1.733,2.459,2.458l4.192-1.993c0.648,0.347,1.334,0.633,2.05,0.851l1.557,4.377c0.571,0.064,1.148,0.104,1.737,0.104c0.588,0,1.165-0.04,1.736-0.104l1.558-4.377c0.715-0.218,1.399-0.504,2.049-0.851l4.193,1.993c0.909-0.725,1.733-1.549,2.458-2.458l-1.993-4.193c0.347-0.647,0.633-1.334,0.851-2.049L31.229,17.736zM16,20.871c-2.69,0-4.872-2.182-4.872-4.871c0-2.69,2.182-4.872,4.872-4.872c2.689,0,4.871,2.182,4.871,4.872C20.871,18.689,18.689,20.871,16,20.871z");
+	var center = r.path("M29.225,23.567l-3.778-6.542c-1.139-1.972-3.002-5.2-4.141-7.172l-3.778-6.542c-1.14-1.973-3.003-1.973-4.142,0L9.609,9.853c-1.139,1.972-3.003,5.201-4.142,7.172L1.69,23.567c-1.139,1.974-0.207,3.587,2.071,3.587h23.391C29.432,27.154,30.363,25.541,29.225,23.567zM16.536,24.58h-2.241v-2.151h2.241V24.58zM16.428,20.844h-2.023l-0.201-9.204h2.407L16.428,20.844z");
+
+	var cleanerId;
+	var selectedLexeme;
+
+	sigInst.bind('downnodes', function(e)
+	{
+		var keyword = "" + e.content;
+
+		selectedLexeme = keyword;
+
+		var eNode = "?" ;
+		sigInst.iterNodes(function(n){
+			eNode = n;
+		},[e.content]);
+		if(eNode && eNode.attr.type == "lexical")
+		{
+			console.log("downnode");
+			if(cleanerId)
+				clearTimeout(cleanerId);
+			if(json["primer"])
+				createBreadcrumb("breadcrumb_canvas", json["primer"], keyword);
+			else
+				createBreadcrumb("breadcrumb_canvas", keyword);
+		}
+	});
+	
+	sigInst.bind('downgraph', function(e)
+	{
+		console.log("downgraph");
+		
+		selectedLexeme = "";
+		
+		cleanerId = setTimeout(function(){
+			if(json["primer"])
+				createBreadcrumb("breadcrumb_canvas", json["primer"]);
+			else
+				createBreadcrumb("breadcrumb_canvas");			
+		}.bind(this));
+	});
+	
+
+	sigInst.startForceAtlas2();
+
+	stopLayout = function()
+	{
+		if(isRunning)
+		{
+			isRunning = false;
+			sigInst.stopForceAtlas2();
+		}
+	};
+
+	setTimeout("stopLayout()", 30000);
+
+	var set = r.set();
+
+	set .push(toggle);
+	set .push(center);	
+	
+	set.hover(function ()
+	{
+		//notice.attr("text", "a");
+		this.stop().animate({opacity: 1}, 200);
+	}, function ()
+	{
+		//notice.text = "b";
+		this.stop().animate({opacity: 0.5}, 200);
+	})
+	.attr({"opacity": 0.5, fill: "#000", stroke: "none"});
+
+	toggle.translate(10, 10);
+	center.translate(50, 10);
+
+	toggle.click(function ()
+	{
+		if(isRunning)
+		{
+			isRunning = false;
+			sigInst.stopForceAtlas2();
+		}
+		else
+		{
+			isRunning = true;
+			sigInst.startForceAtlas2();
+		}
+	});
+
+	center.click(function()
+	{
+		sigInst.position(0,0,1).draw();
+	});
+	
+}
+
+
+</script>
+</head>
+<body style="overflow: hidden">
+	<div id="cacheview">
+	</div>
+	<div id="breadcrumb_canvas">
+		<h1>Atlas Visualization Demo</h1>
+	</div>
+	<div id="holder">
+	</div>
+	<div id="footer">
+		<div id="panel" style="position:absolute;width:1280px;height:60px;">
+		</div>
+		<br/>
+		<br/>
+		<p class='sigma-font'>Download as <a id="source">JSON</a></p>
+		<p class='sigma-font'>
+			All rights reserved by nullgate@gmail.com, 2013-2017
+		</p>
+	</div>
+</body>
+</HTML>
