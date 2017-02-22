@@ -1,4 +1,5 @@
 { "nodes" : [
+
   {"id": "uk", "count": 116, "inbound":0, "inflow":0, "outbound":1, "outflow":16, "type": "prefix", "is_hub":0, "cyclic":0, "saturation":0.1379 },
   {"id": "market", "count": 496, "inbound":4, "inflow":176, "outbound":2, "outflow":41, "type": "infix", "is_hub":1, "cyclic":0, "saturation":0.4375 },
   {"id": "minister", "count": 15, "inbound":0, "inflow":0, "outbound":2, "outflow":15, "type": "prefix", "is_hub":0, "cyclic":0, "saturation":1 },
@@ -129,5 +130,4 @@
 ],
   watermark: { "count":496, "inbound":10, "inflow":176, "outbound":11, "outflow":160, "saturation":11 },
   context: { "cardinality":496, "clusters":3, "circles":0 }
-}
- 
+} 
